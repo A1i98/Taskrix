@@ -207,6 +207,9 @@ fn seconds_until_next(h: u32, m: u32) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load .env if present (ignore errors if not found)
+    let _ = dotenvy::dotenv();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::from_default_env()
