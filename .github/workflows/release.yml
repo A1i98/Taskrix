@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: taskrix
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build (release)
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          stage="dist/stage"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp "target/${{ matrix.target }}/release/${BIN_NAME}" "$stage/" || cp "target/${{ matrix.target }}/release/${BIN_NAME}" "$stage/"
+          cp README.md "$stage/" || true
+          tar -C "$stage" -czf "dist/${BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" .
+          (cd dist && sha256sum "${BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" > "${BIN_NAME}-${{ matrix.target }}.sha256" || shasum -a 256 "${BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" > "${BIN_NAME}-${{ matrix.target }}.sha256")
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $stage = "dist/stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${env:BIN_NAME}.exe" "$stage/"
+          Copy-Item "README.md" "$stage/" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/${env:BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.zip" -Force
+          $hash = Get-FileHash "dist/${env:BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.zip" -Algorithm SHA256
+          "$($hash.Hash.ToLower())  ${env:BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.zip" | Out-File -Encoding ascii "dist/${env:BIN_NAME}-${{ matrix.target }}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -R dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/**
