@@ -29,6 +29,8 @@ pub struct Config {
     pub remind_room: Option<String>,
     pub digest_at: (u32, u32),
     pub allowed: Vec<String>,
+    pub add_created_date: bool,
+    pub add_created_time: bool,
 }
 
 fn parse_digest_at(value: &str, lang: Lang) -> Result<(u32, u32)> {
@@ -44,6 +46,16 @@ fn parse_digest_at(value: &str, lang: Lang) -> Result<(u32, u32)> {
         anyhow::bail!(i18n::digest_out_of_range(lang));
     }
     Ok((hour, minute))
+}
+
+fn parse_bool_env(val: Option<String>, default: bool) -> bool {
+    match val {
+        None => default,
+        Some(v) => {
+            let s = v.trim().to_lowercase();
+            !matches!(s.as_str(), "0" | "false" | "no" | "off")
+        }
+    }
 }
 
 impl Config {
@@ -106,6 +118,8 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
         let admin = std::env::var("ADMIN_USER").unwrap_or_else(|_| user.clone());
+        let add_created_date = parse_bool_env(std::env::var("ADD_CREATED_DATE").ok(), true);
+        let add_created_time = parse_bool_env(std::env::var("ADD_CREATED_TIME").ok(), false);
 
         Ok(Self {
             homeserver,
@@ -124,6 +138,8 @@ impl Config {
             remind_room,
             digest_at,
             allowed,
+            add_created_date,
+            add_created_time,
         })
     }
 

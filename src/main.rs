@@ -313,7 +313,7 @@ async fn handle_message(
         return;
     }
 
-    let parsed = parse::parse(raw_task);
+    let mut parsed = parse::parse(raw_task);
     if parsed.text.trim().is_empty() {
         let msg = if cfg.lang == i18n::Lang::Fa {
             "نتوانستم عنوان تسک را از پیام استخراج کنم."
@@ -323,8 +323,15 @@ async fn handle_message(
         send_plain(&room, msg).await;
         return;
     }
-
-    let line = parse::build_line(&parsed);
+    if cfg.add_created_time {
+        let t = Local::now().format("%H:%M");
+        parsed.text = format!("{} {}", t, parsed.text.trim());
+    }
+    let mut line = parse::build_line(&parsed);
+    if cfg.add_created_date {
+        let d = Local::now().format("%Y-%m-%d");
+        line.push_str(&format!(" ➕ {}", d));
+    }
     let result = if cfg.task_destination == config::TaskDestination::Journal {
         let date = parsed
             .due
