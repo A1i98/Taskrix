@@ -4,6 +4,7 @@ use chrono::{Duration, Local, NaiveDate};
 pub struct Parsed {
     pub text: String,
     pub due: Option<NaiveDate>,
+    pub scheduled: Option<NaiveDate>,
     pub prio: Option<&'static str>,
     pub recur: Option<String>,
 }
@@ -28,22 +29,53 @@ fn priority_from_token(token: &str) -> Option<&'static str> {
 
 /// Parse task text supporting short syntax and some Tasks plugin inline fields.
 pub fn parse(raw: &str) -> Parsed {
-    let (mut due, mut prio, mut recur) = (None, None, None);
+    let (mut due, mut scheduled, mut prio, mut recur) = (None, None, None, None);
     let mut keep: Vec<String> = Vec::new();
-
-    for word in raw.split_whitespace() {
-        // Short due: @+2 or @2026-11-20
-        if let Some(v) = word.strip_prefix('@') {
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    let mut i = 0;
+    while i < words.len() {
+        let word = words[i];
+        // Scheduled: ⏳ followed by date, or ⏳2026-...
+        if word == "⏳" {
+            if i + 1 < words.len() {
+                if let Some(d) = parse_due_value(words[i + 1]) {
+                    scheduled = Some(d);
+                    i += 2;
+                    continue;
+                }
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(v) = word.strip_prefix("⏳") {
             if let Some(d) = parse_due_value(v) {
-                due = Some(d);
+                scheduled = Some(d);
+                i += 1;
+                continue;
+            }
+        }
+        if let Some(v) = word.strip_prefix("scheduled::") {
+            if let Some(d) = parse_due_value(v) {
+                scheduled = Some(d);
+                i += 1;
                 continue;
             }
         }
 
-        // Inline field style: due::2026-11-20 or due:: 2026-11-20 (handled if attached)
+        // Short due: @+2 or @2026-11-20
+        if let Some(v) = word.strip_prefix('@') {
+            if let Some(d) = parse_due_value(v) {
+                due = Some(d);
+                i += 1;
+                continue;
+            }
+        }
+
+        // Inline field style: due::2026-11-20
         if let Some(v) = word.strip_prefix("due::") {
             if let Some(d) = parse_due_value(v) {
                 due = Some(d);
+                i += 1;
                 continue;
             }
         }
@@ -58,6 +90,7 @@ pub fn parse(raw: &str) -> Parsed {
             };
             if let Some(rr) = r {
                 recur = Some(rr);
+                i += 1;
                 continue;
             }
         }
@@ -65,29 +98,34 @@ pub fn parse(raw: &str) -> Parsed {
             let v = word.trim_start_matches("repeat::").trim();
             if !v.is_empty() {
                 recur = Some(v.to_string());
-                continue;
             }
+            i += 1;
+            continue;
         }
 
         if word.starts_with("priority::") {
             let v = word.trim_start_matches("priority::").trim();
             if let Some(p) = priority_from_token(v) {
                 prio = Some(p);
-                continue;
             }
+            i += 1;
+            continue;
         }
 
         if let Some(p) = priority_from_token(word) {
             prio = Some(p);
+            i += 1;
             continue;
         }
 
         keep.push(word.to_string());
+        i += 1;
     }
 
     Parsed {
         text: keep.join(" "),
         due,
+        scheduled,
         prio,
         recur,
     }

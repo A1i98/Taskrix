@@ -21,6 +21,8 @@ pub struct Config {
     pub inbox: String,
     pub journal_dir: String,
     pub tasks_heading: Option<String>,
+    pub ignore_dirs: Vec<String>,
+    pub include_dirs: Vec<String>,
     pub task_destination: TaskDestination,
     pub lang: Lang,
     pub store: String,
@@ -67,6 +69,16 @@ impl Config {
         let tasks_heading = std::env::var("TASKS_HEADING")
             .ok()
             .filter(|s| !s.is_empty());
+        let ignore_dirs: Vec<String> = std::env::var("IGNORE_DIRS")
+            .unwrap_or_else(|_| ".obsidian,.trash,.git,templates".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let include_dirs: Vec<String> = std::env::var("INCLUDE_DIRS")
+            .ok()
+            .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            .unwrap_or_default();
         let task_destination = match std::env::var("TASK_DEST")
             .unwrap_or_else(|_| "inbox".to_string())
             .to_lowercase()
@@ -99,6 +111,8 @@ impl Config {
             inbox,
             journal_dir,
             tasks_heading,
+            ignore_dirs,
+            include_dirs,
             task_destination,
             lang,
             store,

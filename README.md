@@ -5,9 +5,11 @@ A lightweight Rust Matrix bot that turns messages into Obsidian tasks (Markdown 
 ## Features
 
 - Creates tasks from Matrix messages and appends them to your Obsidian vault (Inbox or daily journals).
-- Parses: `@+3`, `@2026-11-20`, `due::2026-11-20`, priorities `! !! !!!` or `priority::high`, recurrence `#daily/#weekly/#monthly` or `repeat::...`.
-- Commands: `!today`, `!done <query>`, `!roomid`, `!help`.
-- Optional daily digest sent to a configured room.
+- Parses: `@+3`, `@2026-11-20`, `due::2026-11-20`, `⏳ YYYY-MM-DD` / `scheduled::...`, priorities (`! !! !!!`, `priority::high`), recurrence (`#daily/#weekly/#monthly`, `repeat::...`).
+- Commands (Matrix): `!help`, `!ping`, `!version`, `!today`, `!list` (key tasks), `!list all`, `!list today`, `!list overdue`, `!done <text|number>`, `!roomid`, `!config show` (admin).
+- `!done <n>` completes the nth item from the last list shown in that room.
+- Auto-loads `.env` from the current working directory if present (via `dotenvy`).
+- Optional daily digest to a configured room; scans only `INCLUDE_DIRS` if set, otherwise the whole vault minus `IGNORE_DIRS`.
 - GitHub Actions: CI + release builds (including Linux arm64).
 
 ## Build
@@ -26,15 +28,28 @@ cargo build --release
 - `TASK_DEST` (optional): `inbox` (default) or `journal`
 - `JOURNAL_DIR` (optional): default `journals`
 - `JOURNAL_FORMAT` (optional): reserved for future use (default `%Y-%m-%d.md`)
-- `TASKS_HEADING` (optional): heading to insert in new journal files, e.g. `## Tasks`
+- `TASKS_HEADING` (optional): heading in new journal files, e.g. `## Tasks`
+- `INCLUDE_DIRS` (optional): comma-separated folders under `VAULT` to scan (if set, only these)
+- `IGNORE_DIRS` (optional): comma-separated folder names to ignore (default: `.obsidian,.trash,.git,templates`)
 - `STORE` (optional): SQLite store path (default `./taskrix-store`)
 - `REMIND_ROOM` (optional): room ID for daily digest
 - `DIGEST_AT` (optional): `HH:MM` (default `08:00`)
 - `ALLOWED` (optional): comma-separated sender MXIDs (default: only `MATRIX_USER`)
-- `LANG` (optional): `en` (default) or `fa` for Persian responses
+- `ADMIN_USER` (optional): admin MXID for bot admin commands (default: `MATRIX_USER`)
+- `LANG` (optional): `en` (default) or `fa`
 - `RUST_LOG` (optional): e.g. `info`
 
-## Run example
+## Run
+
+Place a `.env` in the project directory (see `.env.example`) or export variables, then:
+
+```bash
+cargo run --release
+# or
+./target/release/taskrix
+```
+
+## Run example (env exports)
 
 ```bash
 export MATRIX_HS=https://matrix.example.com

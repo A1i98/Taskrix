@@ -18,6 +18,7 @@ use matrix_sdk::{
     },
     Client, LoopCtrl,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
@@ -30,13 +31,19 @@ async fn send_plain(room: &Room, body: &str) {
     }
 }
 
-async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMessageEvent) {
+async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMessageEvent, start_ts: u64, last_lists: Arc<tokio::sync::Mutex<HashMap<String, Vec<tasks::Task>>>>) {
+    let room_id = room.room_id().to_string();
     // Ignore messages from self
     if event.sender.as_str() == cfg.user {
         return;
     }
     // Allowlist check
     if !cfg.is_allowed(event.sender.as_str()) {
+        return;
+    }
+    // Ignore old messages (replayed on sync)
+    let msg_ts: u64 = event.origin_server_ts.0.try_into().unwrap_or(0);
+    if msg_ts < start_ts.saturating_sub(120_000) {
         return;
     }
 
@@ -69,23 +76,85 @@ async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMes
     }
 
     if lower == "!today" || lower == "!امروز" {
-        let digest = tasks::digest(&cfg.vault);
+        let digest = tasks::digest(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs);
         send_plain(&room, &digest).await;
         return;
     }
 
     if lower == "!list" || lower == "!tasks" || lower == "!لیست" {
-        let all = tasks::open_tasks(&cfg.vault);
-        if all.is_empty() {
+        let list = tasks::list_default(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs);
+        if list.is_empty() {
             send_plain(&room, i18n::no_open_tasks(cfg.lang)).await;
         } else {
-            let mut out = i18n::open_tasks_header(cfg.lang, all.len());
-            for (i, t) in all.iter().take(15).enumerate() {
+            let header = if cfg.lang == i18n::Lang::Fa {
+                format!("تسک‌های مهم (overdue + امروز + تا ۴۵ روز آینده)، {} مورد:\n", list.len())
+            } else {
+                format!("Key tasks (overdue + today + next 45 days), {} items:\n", list.len())
+            };
+            let mut out = header;
+            for (i, t) in list.iter().take(20).enumerate() {
+                let due = t.due.map(|d| format!(" ({})", d.format("%Y-%m-%d"))).unwrap_or_default();
+                let sched = t.scheduled.map(|d| format!(" ⏳{}", d.format("%Y-%m-%d"))).unwrap_or_default();
+                out.push_str(&format!("{}. {}{}{}\n", i + 1, t.text, due, sched));
+            }
+            if list.len() > 20 {
+                out.push_str(&i18n::and_more(cfg.lang, list.len() - 20));
+            }
+            last_lists.lock().await.insert(room_id.clone(), list);
+            send_plain(&room, &out).await;
+        }
+        return;
+    }
+    if lower == "!list all" || lower == "!tasks all" {
+        let list = tasks::list_all(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs);
+        if list.is_empty() {
+            send_plain(&room, i18n::no_open_tasks(cfg.lang)).await;
+        } else {
+            let mut out = if cfg.lang == i18n::Lang::Fa {
+                format!("همهٔ تسک‌های باز ({} مورد)، نمایش تا ۲۰:\n", list.len())
+            } else {
+                format!("All open tasks ({}), showing up to 20:\n", list.len())
+            };
+            for (i, t) in list.iter().take(20).enumerate() {
+                let due = t.due.map(|d| format!(" ({})", d.format("%Y-%m-%d"))).unwrap_or_default();
+                let sched = t.scheduled.map(|d| format!(" ⏳{}", d.format("%Y-%m-%d"))).unwrap_or_default();
+                out.push_str(&format!("{}. {}{}{}\n", i + 1, t.text, due, sched));
+            }
+            if list.len() > 20 {
+                out.push_str(&i18n::and_more(cfg.lang, list.len() - 20));
+            }
+            last_lists.lock().await.insert(room_id.clone(), list);
+            send_plain(&room, &out).await;
+        }
+        return;
+    }
+    if lower == "!list overdue" {
+        let list = tasks::list_overdue(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs);
+        if list.is_empty() {
+            let msg = if cfg.lang == i18n::Lang::Fa { "تسک عقب‌افتاده‌ای نیست." } else { "No overdue tasks." };
+            send_plain(&room, msg).await;
+        } else {
+            let mut out = if cfg.lang == i18n::Lang::Fa { format!("عقب‌افتاده ({}):\n", list.len()) } else { format!("Overdue ({}):\n", list.len()) };
+            for (i, t) in list.iter().take(20).enumerate() {
+                let due = t.due.map(|d| format!(" ({})", d.format("%Y-%m-%d"))).unwrap_or_default();
+                out.push_str(&format!("{}. {}{}\n", i + 1, t.text, due));
+            }
+            last_lists.lock().await.insert(room_id.clone(), list);
+            send_plain(&room, &out).await;
+        }
+        return;
+    }
+    if lower == "!list today" {
+        let list = tasks::list_today(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs);
+        if list.is_empty() {
+            let msg = if cfg.lang == i18n::Lang::Fa { "برای امروز تسکی نیست." } else { "No tasks due today." };
+            send_plain(&room, msg).await;
+        } else {
+            let mut out = if cfg.lang == i18n::Lang::Fa { format!("امروز ({}):\n", list.len()) } else { format!("Today ({}):\n", list.len()) };
+            for (i, t) in list.iter().take(20).enumerate() {
                 out.push_str(&format!("{}. {}\n", i + 1, t.text));
             }
-            if all.len() > 15 {
-                out.push_str(&i18n::and_more(cfg.lang, all.len() - 15));
-            }
+            last_lists.lock().await.insert(room_id.clone(), list);
             send_plain(&room, &out).await;
         }
         return;
@@ -120,7 +189,44 @@ async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMes
             send_plain(&room, i18n::done_usage(cfg.lang)).await;
             return;
         }
-        match tasks::complete_task(&cfg.vault, query) {
+        // Try to parse as number (index from last list)
+        if let Ok(n) = query.parse::<usize>() {
+            if n == 0 {
+                send_plain(&room, if cfg.lang == i18n::Lang::Fa { "شماره باید از ۱ شروع شود." } else { "Index must start from 1." }).await;
+                return;
+            }
+            let lists = last_lists.lock().await;
+            if let Some(list) = lists.get(&room_id) {
+                if n <= list.len() {
+                    let task = &list[n - 1];
+                    match std::fs::read_to_string(&task.file) {
+                        Ok(content) => {
+                            let done_line = task.line.replacen("- [ ]", "- [x]", 1);
+                            if done_line == task.line {
+                                send_plain(&room, i18n::done_not_found(cfg.lang)).await;
+                            } else {
+                                let new_content = content.replacen(&task.line, &done_line, 1);
+                                if new_content != content {
+                                    let _ = std::fs::write(&task.file, &new_content);
+                                    send_plain(&room, &i18n::done_ok(cfg.lang, &task.text)).await;
+                                } else {
+                                    send_plain(&room, i18n::done_not_found(cfg.lang)).await;
+                                }
+                            }
+                        }
+                        Err(_) => send_plain(&room, i18n::done_not_found(cfg.lang)).await,
+                    }
+                } else {
+                    let msg = if cfg.lang == i18n::Lang::Fa { format!("فقط {} مورد در لیست آخر بود.", list.len()) } else { format!("Last list had only {} items.", list.len()) };
+                    send_plain(&room, &msg).await;
+                }
+            } else {
+                let msg = if cfg.lang == i18n::Lang::Fa { "اول یک لیست بگیر (مثل !list) بعد شماره بده." } else { "Get a list first (e.g. !list), then use its number." };
+                send_plain(&room, msg).await;
+            }
+            return;
+        }
+        match tasks::complete_task(&cfg.vault, &cfg.ignore_dirs, &cfg.include_dirs, query) {
             Some(t) => send_plain(&room, &i18n::done_ok(cfg.lang, &t)).await,
             None => send_plain(&room, i18n::done_not_found(cfg.lang)).await,
         }
@@ -220,6 +326,8 @@ async fn main() -> Result<()> {
 
     let cfg = Arc::new(Config::from_env()?);
     info!("Starting Taskrix, homeserver={}", cfg.homeserver);
+    type LastLists = Arc<tokio::sync::Mutex<HashMap<String, Vec<tasks::Task>>>>;
+    let last_lists: LastLists = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
     let client = Client::builder()
         .homeserver_url(&cfg.homeserver)
@@ -242,13 +350,20 @@ async fn main() -> Result<()> {
         );
     }
 
+    let start_ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
     // Message handler
     client.add_event_handler({
         let cfg = cfg.clone();
+        let last_lists = last_lists.clone();
         move |ev: OriginalSyncRoomMessageEvent, room: Room| {
             let cfg = cfg.clone();
+            let last_lists = last_lists.clone();
             async move {
-                handle_message(cfg, room, ev).await;
+                handle_message(cfg, room, ev, start_ts, last_lists).await;
             }
         }
     });
@@ -282,7 +397,7 @@ async fn main() -> Result<()> {
                 match RoomId::parse(&room_id_str) {
                     Ok(rid) => {
                         if let Some(room) = client_clone.get_room(&rid) {
-                            let digest = tasks::digest(&cfg_clone.vault);
+                            let digest = tasks::digest(&cfg_clone.vault, &cfg_clone.ignore_dirs, &cfg_clone.include_dirs);
                             let content = RoomMessageEventContent::text_plain(digest);
                             if let Err(e) = room.send(content).await {
                                 warn!("Failed to send digest: {e}");
@@ -302,10 +417,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Starting sync loop...");
-    // Initial sync
     let sync_settings = SyncSettings::default();
-    client.sync_once(sync_settings.clone()).await?;
-    // Continuous sync
     client
         .sync_with_callback(sync_settings, |_| async { LoopCtrl::Continue })
         .await?;

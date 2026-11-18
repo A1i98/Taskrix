@@ -9,6 +9,7 @@ pub struct Task {
     pub line: String,
     pub text: String,
     pub due: Option<NaiveDate>,
+    pub scheduled: Option<NaiveDate>,
 }
 
 fn task_text(line: &str) -> Option<&str> {
@@ -20,7 +21,6 @@ fn task_text(line: &str) -> Option<&str> {
 }
 
 fn due_of(line: &str) -> Option<NaiveDate> {
-    // Try emoji style 📅
     if let Some(idx) = line.find('📅') {
         let tail = line[idx + '📅'.len_utf8()..].trim_start();
         let date_str: String = tail.chars().take_while(|c| !c.is_whitespace()).collect();
@@ -28,9 +28,32 @@ fn due_of(line: &str) -> Option<NaiveDate> {
             return Some(d);
         }
     }
-    // Try Tasks plugin inline: due:: 2026-11-20
     if let Some(idx) = line.find("due::") {
         let tail = line[idx + "due::".len()..].trim_start();
+        let date_str: String = tail
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != ']')
+            .collect();
+        if let Ok(d) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
+            return Some(d);
+        }
+    }
+    None
+}
+
+fn scheduled_of(line: &str) -> Option<NaiveDate> {
+    if let Some(idx) = line.find('⏳') {
+        let tail = line[idx + '⏳'.len_utf8()..].trim_start();
+        let date_str: String = tail
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != ']')
+            .collect();
+        if let Ok(d) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
+            return Some(d);
+        }
+    }
+    if let Some(idx) = line.find("scheduled::") {
+        let tail = line[idx + "scheduled::".len()..].trim_start();
         let date_str: String = tail
             .chars()
             .take_while(|c| !c.is_whitespace() && *c != ']')
@@ -81,28 +104,39 @@ pub fn append_task_to_journal(
     Ok(path)
 }
 
-fn walk_markdown_files(dir: &Path, out: &mut Vec<PathBuf>) {
+fn walk_markdown_files(dir: &Path, out: &mut Vec<PathBuf>, ignore_dirs: &[String]) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with('.') {
-            continue; // skip .obsidian, .git, .trash etc.
+        let name = name.to_string_lossy().to_string();
+        if name.starts_with('.') || ignore_dirs.iter().any(|d| d == &name) {
+            continue;
         }
         if path.is_dir() {
-            walk_markdown_files(&path, out);
+            walk_markdown_files(&path, out, ignore_dirs);
         } else if path.extension().is_some_and(|ext| ext == "md") {
             out.push(path);
         }
     }
 }
 
-pub fn open_tasks(vault: &Path) -> Vec<Task> {
+pub fn open_tasks(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
     let mut files = Vec::new();
-    walk_markdown_files(vault, &mut files);
+    if !include_dirs.is_empty() {
+        for inc in include_dirs {
+            let p = vault.join(inc);
+            if p.is_dir() {
+                walk_markdown_files(&p, &mut files, ignore_dirs);
+            } else if p.is_file() && p.extension().is_some_and(|e| e == "md") {
+                files.push(p);
+            }
+        }
+    } else {
+        walk_markdown_files(vault, &mut files, ignore_dirs);
+    }
 
     let mut tasks = Vec::new();
     for file in files {
@@ -116,6 +150,7 @@ pub fn open_tasks(vault: &Path) -> Vec<Task> {
                     line: line.to_string(),
                     text: text.to_string(),
                     due: due_of(line),
+                    scheduled: scheduled_of(line),
                 });
             }
         }
@@ -123,9 +158,9 @@ pub fn open_tasks(vault: &Path) -> Vec<Task> {
     tasks
 }
 
-pub fn complete_task(vault: &Path, query: &str) -> Option<String> {
+pub fn complete_task(vault: &Path, ignore_dirs: &[String], include_dirs: &[String], query: &str) -> Option<String> {
     let q = query.to_lowercase();
-    for task in open_tasks(vault) {
+    for task in open_tasks(vault, ignore_dirs, include_dirs) {
         if task.line.to_lowercase().contains(&q) || task.text.to_lowercase().contains(&q) {
             let content = fs::read_to_string(&task.file).ok()?;
             let done_line = task.line.replacen("- [ ]", "- [x]", 1);
@@ -140,9 +175,9 @@ pub fn complete_task(vault: &Path, query: &str) -> Option<String> {
     None
 }
 
-pub fn digest(vault: &Path) -> String {
+pub fn digest(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> String {
     let today = Local::now().date_naive();
-    let tasks = open_tasks(vault);
+    let tasks = open_tasks(vault, ignore_dirs, include_dirs);
 
     let mut overdue: Vec<&Task> = tasks
         .iter()
@@ -195,4 +230,56 @@ pub fn digest(vault: &Path) -> String {
     }
 
     out
+}
+
+pub fn list_default(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
+    let today = Local::now().date_naive();
+    let end = today + chrono::Duration::days(45);
+    let mut tasks: Vec<Task> = open_tasks(vault, ignore_dirs, include_dirs)
+        .into_iter()
+        .filter(|t| {
+            let scheduled_ok = t.scheduled.is_some_and(|s| s <= today);
+            let due_ok = t.due.is_some_and(|d| d <= end);
+            scheduled_ok || due_ok
+        })
+        .collect();
+    tasks.sort_by(|a, b| {
+        let ad = a.due.unwrap_or(today + chrono::Duration::days(9999));
+        let bd = b.due.unwrap_or(today + chrono::Duration::days(9999));
+        ad.cmp(&bd).then_with(|| a.text.cmp(&b.text))
+    });
+    tasks
+}
+
+pub fn list_all(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
+    let mut tasks = open_tasks(vault, ignore_dirs, include_dirs);
+    tasks.sort_by(|a, b| {
+        match (a.due, b.due) {
+            (Some(da), Some(db)) => da.cmp(&db).then_with(|| a.text.cmp(&b.text)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.text.cmp(&b.text),
+        }
+    });
+    tasks
+}
+
+pub fn list_overdue(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
+    let today = Local::now().date_naive();
+    let mut tasks: Vec<Task> = open_tasks(vault, ignore_dirs, include_dirs)
+        .into_iter()
+        .filter(|t| t.due.is_some_and(|d| d < today))
+        .collect();
+    tasks.sort_by_key(|t| t.due);
+    tasks
+}
+
+pub fn list_today(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
+    let today = Local::now().date_naive();
+    let mut tasks: Vec<Task> = open_tasks(vault, ignore_dirs, include_dirs)
+        .into_iter()
+        .filter(|t| t.due == Some(today))
+        .collect();
+    tasks.sort_by(|a, b| a.text.cmp(&b.text));
+    tasks
 }

@@ -21,8 +21,8 @@ pub fn help(lang: Lang) -> &'static str {
 - `@+3` یا `@2026-11-20` یا `due::2026-11-20` → سررسید\n\
 - `#daily|weekly|monthly` یا `repeat::...` → تکرار\n\
 - `! !! !!!` یا `priority::high` → اولویت\n\
-- `!today` یا `!امروز` → خلاصه امروز\n\
-- `!list` → چند تسک باز\n\
+- `!today` / `!امروز` → خلاصه امروز\n\
+- `!list` (مهم‌ترین‌ها) | `!list all` | `!list today` | `!list overdue`\n\
 - `!done متن` → انجام شدن تسک\n\
 - `!ping` / `!version` / `!roomid` / `!help`"
         }
@@ -33,7 +33,7 @@ pub fn help(lang: Lang) -> &'static str {
 - `#daily|weekly|monthly` or `repeat::...` -> recurrence\n\
 - `! !! !!!` or `priority::high` -> priority\n\
 - `!today` -> digest\n\
-- `!list` -> list some open tasks\n\
+- `!list` (key) | `!list all` | `!list today` | `!list overdue`\n\
 - `!done <text>` -> complete a task\n\
 - `!ping` / `!version` / `!roomid` / `!help`"
         }
