@@ -1,0 +1,4 @@
+/target/
+taskrix-store/
+.env
+*.log

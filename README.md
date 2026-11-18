@@ -31,6 +31,7 @@ cargo build --release
 - `REMIND_ROOM` (optional): room ID for daily digest
 - `DIGEST_AT` (optional): `HH:MM` (default `08:00`)
 - `ALLOWED` (optional): comma-separated sender MXIDs (default: only `MATRIX_USER`)
+- `LANG` (optional): `en` (default) or `fa` for Persian responses
 - `RUST_LOG` (optional): e.g. `info`
 
 ## Run example
