@@ -139,6 +139,9 @@ pub fn build_line(p: &Parsed) -> String {
     if let Some(pr) = p.prio {
         line.push_str(&format!(" {pr}"));
     }
+    if let Some(s) = p.scheduled {
+        line.push_str(&format!(" ⏳ {}", s.format("%Y-%m-%d")));
+    }
     if let Some(d) = p.due {
         line.push_str(&format!(" 📅 {}", d.format("%Y-%m-%d")));
     }

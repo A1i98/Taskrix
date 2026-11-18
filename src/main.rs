@@ -48,7 +48,7 @@ async fn handle_message(
         return;
     }
     // Ignore old messages (replayed on sync)
-    let msg_ts: u64 = event.origin_server_ts.0.try_into().unwrap_or(0);
+    let msg_ts: u64 = event.origin_server_ts.0.into();
     if msg_ts < start_ts.saturating_sub(120_000) {
         return;
     }

@@ -51,13 +51,6 @@ pub fn no_open_tasks(lang: Lang) -> &'static str {
     }
 }
 
-pub fn open_tasks_header(lang: Lang, total: usize) -> String {
-    match lang {
-        Lang::Fa => format!("تسک‌های باز (نمایش حداکثر ۱۵ از {}):\n", total),
-        Lang::En => format!("Open tasks (showing up to 15 of {}):\n", total),
-    }
-}
-
 pub fn and_more(lang: Lang, n: usize) -> String {
     match lang {
         Lang::Fa => format!("...و {} تای دیگر.", n),
