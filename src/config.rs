@@ -20,7 +20,6 @@ pub struct Config {
     pub vault: PathBuf,
     pub inbox: String,
     pub journal_dir: String,
-    pub journal_format: String,
     pub tasks_heading: Option<String>,
     pub task_destination: TaskDestination,
     pub lang: Lang,
@@ -65,8 +64,6 @@ impl Config {
         );
         let inbox = std::env::var("INBOX_FILE").unwrap_or_else(|_| "Inbox.md".to_string());
         let journal_dir = std::env::var("JOURNAL_DIR").unwrap_or_else(|_| "journals".to_string());
-        let journal_format =
-            std::env::var("JOURNAL_FORMAT").unwrap_or_else(|_| "%Y-%m-%d.md".to_string());
         let tasks_heading = std::env::var("TASKS_HEADING")
             .ok()
             .filter(|s| !s.is_empty());
@@ -101,7 +98,6 @@ impl Config {
             vault,
             inbox,
             journal_dir,
-            journal_format,
             tasks_heading,
             task_destination,
             lang,

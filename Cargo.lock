@@ -1314,6 +1314,7 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad8935b44e7c13394a179a438e0cebba0fe08fe01b54f152e29a93b5cf993fd4"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -2549,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "taskrix"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",

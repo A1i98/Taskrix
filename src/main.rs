@@ -32,7 +32,7 @@ async fn send_plain(room: &Room, body: &str) {
 
 async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMessageEvent) {
     // Ignore messages from self
-    if event.sender.to_string() == cfg.user {
+    if event.sender.as_str() == cfg.user {
         return;
     }
     // Allowlist check
@@ -93,7 +93,7 @@ async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMes
 
     // admin-only config show (minimal)
     if lower == "!config" || lower == "!config show" {
-        if event.sender.to_string() != cfg.admin {
+        if event.sender.as_str() != cfg.admin {
             send_plain(&room, i18n::not_authorized(cfg.lang)).await;
         } else {
             let dest = match cfg.task_destination {
