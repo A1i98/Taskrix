@@ -168,9 +168,13 @@ pub fn complete_task(
     for task in open_tasks(vault, ignore_dirs, include_dirs) {
         if task.line.to_lowercase().contains(&q) || task.text.to_lowercase().contains(&q) {
             let content = fs::read_to_string(&task.file).ok()?;
-            let done_line = task.line.replacen("- [ ]", "- [x]", 1);
+            let mut done_line = task.line.replacen("- [ ]", "- [x]", 1);
             if done_line == task.line {
                 continue;
+            }
+            if !done_line.contains("✅") {
+                let today = Local::now().format("%Y-%m-%d");
+                done_line = format!("{} ✅ {}", done_line.trim_end(), today);
             }
             let new_content = content.replacen(&task.line, &done_line, 1);
             fs::write(&task.file, new_content).ok()?;

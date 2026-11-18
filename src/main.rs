@@ -252,10 +252,14 @@ async fn handle_message(
                     let task = &list[n - 1];
                     match std::fs::read_to_string(&task.file) {
                         Ok(content) => {
-                            let done_line = task.line.replacen("- [ ]", "- [x]", 1);
+                            let mut done_line = task.line.replacen("- [ ]", "- [x]", 1);
                             if done_line == task.line {
                                 send_plain(&room, i18n::done_not_found(cfg.lang)).await;
                             } else {
+                                if !done_line.contains("✅") {
+                                    let today = Local::now().format("%Y-%m-%d");
+                                    done_line = format!("{} ✅ {}", done_line.trim_end(), today);
+                                }
                                 let new_content = content.replacen(&task.line, &done_line, 1);
                                 if new_content != content {
                                     let _ = std::fs::write(&task.file, &new_content);
