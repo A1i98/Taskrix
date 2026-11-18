@@ -15,7 +15,8 @@ impl Lang {
 
 pub fn help(lang: Lang) -> &'static str {
     match lang {
-        Lang::Fa => "**تسکریکس**\n\
+        Lang::Fa => {
+            "**تسکریکس**\n\
 - هر متنی بفرستی → ساخت تسک\n\
 - `@+3` یا `@2026-11-20` یا `due::2026-11-20` → سررسید\n\
 - `#daily|weekly|monthly` یا `repeat::...` → تکرار\n\
@@ -23,8 +24,10 @@ pub fn help(lang: Lang) -> &'static str {
 - `!today` یا `!امروز` → خلاصه امروز\n\
 - `!list` → چند تسک باز\n\
 - `!done متن` → انجام شدن تسک\n\
-- `!ping` / `!version` / `!roomid` / `!help`",
-        Lang::En => "**Taskrix**\n\
+- `!ping` / `!version` / `!roomid` / `!help`"
+        }
+        Lang::En => {
+            "**Taskrix**\n\
 - Send any text -> creates a task\n\
 - `@+3` / `@2026-11-20` / `due::2026-11-20` -> due date\n\
 - `#daily|weekly|monthly` or `repeat::...` -> recurrence\n\
@@ -32,7 +35,8 @@ pub fn help(lang: Lang) -> &'static str {
 - `!today` -> digest\n\
 - `!list` -> list some open tasks\n\
 - `!done <text>` -> complete a task\n\
-- `!ping` / `!version` / `!roomid` / `!help`",
+- `!ping` / `!version` / `!roomid` / `!help`"
+        }
     }
 }
 
@@ -68,7 +72,15 @@ pub fn not_authorized(lang: Lang) -> &'static str {
     }
 }
 
-pub fn config_show(lang: Lang, task_dest: &str, journal_dir: &str, inbox_file: &str, dh: u32, dm: u32, admin: &str) -> String {
+pub fn config_show(
+    lang: Lang,
+    task_dest: &str,
+    journal_dir: &str,
+    inbox_file: &str,
+    dh: u32,
+    dm: u32,
+    admin: &str,
+) -> String {
     match lang {
         Lang::Fa => format!(
             "کانفیگ (env): TASK_DEST={}، JOURNAL_DIR={}، INBOX_FILE={}، DIGEST_AT={:02}:{:02}، ADMIN={}",

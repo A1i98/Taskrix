@@ -35,7 +35,10 @@ fn parse_digest_at(value: &str, lang: Lang) -> Result<(u32, u32)> {
         .split_once(':')
         .context(i18n::digest_format_invalid(lang))?;
     let hour: u32 = h.trim().parse().context(i18n::digest_hour_invalid(lang))?;
-    let minute: u32 = m.trim().parse().context(i18n::digest_minute_invalid(lang))?;
+    let minute: u32 = m
+        .trim()
+        .parse()
+        .context(i18n::digest_minute_invalid(lang))?;
     if hour > 23 || minute > 59 {
         anyhow::bail!(i18n::digest_out_of_range(lang));
     }
@@ -47,10 +50,10 @@ impl Config {
         let lang_raw = std::env::var("LANG").unwrap_or_else(|_| "en".to_string());
         let lang = Lang::from_env_value(&lang_raw);
 
-        let homeserver = std::env::var("MATRIX_HS")
-            .with_context(|| i18n::env_missing(lang, "MATRIX_HS"))?;
-        let user = std::env::var("MATRIX_USER")
-            .with_context(|| i18n::env_missing(lang, "MATRIX_USER"))?;
+        let homeserver =
+            std::env::var("MATRIX_HS").with_context(|| i18n::env_missing(lang, "MATRIX_HS"))?;
+        let user =
+            std::env::var("MATRIX_USER").with_context(|| i18n::env_missing(lang, "MATRIX_USER"))?;
 
         let password = std::env::var("MATRIX_PASS").ok().filter(|s| !s.is_empty());
         if password.is_none() {
@@ -62,8 +65,11 @@ impl Config {
         );
         let inbox = std::env::var("INBOX_FILE").unwrap_or_else(|_| "Inbox.md".to_string());
         let journal_dir = std::env::var("JOURNAL_DIR").unwrap_or_else(|_| "journals".to_string());
-        let journal_format = std::env::var("JOURNAL_FORMAT").unwrap_or_else(|_| "%Y-%m-%d.md".to_string());
-        let tasks_heading = std::env::var("TASKS_HEADING").ok().filter(|s| !s.is_empty());
+        let journal_format =
+            std::env::var("JOURNAL_FORMAT").unwrap_or_else(|_| "%Y-%m-%d.md".to_string());
+        let tasks_heading = std::env::var("TASKS_HEADING")
+            .ok()
+            .filter(|s| !s.is_empty());
         let task_destination = match std::env::var("TASK_DEST")
             .unwrap_or_else(|_| "inbox".to_string())
             .to_lowercase()

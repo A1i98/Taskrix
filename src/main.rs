@@ -23,8 +23,6 @@ use std::time::Duration;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-
-
 async fn send_plain(room: &Room, body: &str) {
     let content = RoomMessageEventContent::text_plain(body);
     if let Err(e) = room.send(content).await {
@@ -98,8 +96,19 @@ async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMes
         if event.sender.to_string() != cfg.admin {
             send_plain(&room, i18n::not_authorized(cfg.lang)).await;
         } else {
-            let dest = match cfg.task_destination { config::TaskDestination::Inbox => "inbox", config::TaskDestination::Journal => "journal" };
-            let msg = i18n::config_show(cfg.lang, dest, &cfg.journal_dir, &cfg.inbox, cfg.digest_at.0, cfg.digest_at.1, &cfg.admin);
+            let dest = match cfg.task_destination {
+                config::TaskDestination::Inbox => "inbox",
+                config::TaskDestination::Journal => "journal",
+            };
+            let msg = i18n::config_show(
+                cfg.lang,
+                dest,
+                &cfg.journal_dir,
+                &cfg.inbox,
+                cfg.digest_at.0,
+                cfg.digest_at.1,
+                &cfg.admin,
+            );
             send_plain(&room, &msg).await;
         }
         return;
@@ -126,25 +135,42 @@ async fn handle_message(cfg: Arc<Config>, room: Room, event: OriginalSyncRoomMes
     };
 
     if raw_task.is_empty() {
-        let msg = if cfg.lang == i18n::Lang::Fa { "متن تسک خالی است." } else { "Task text is empty." };
+        let msg = if cfg.lang == i18n::Lang::Fa {
+            "متن تسک خالی است."
+        } else {
+            "Task text is empty."
+        };
         send_plain(&room, msg).await;
         return;
     }
 
     let parsed = parse::parse(raw_task);
     if parsed.text.trim().is_empty() {
-        let msg = if cfg.lang == i18n::Lang::Fa { "نتوانستم عنوان تسک را از پیام استخراج کنم." } else { "Could not parse a task title from your message." };
+        let msg = if cfg.lang == i18n::Lang::Fa {
+            "نتوانستم عنوان تسک را از پیام استخراج کنم."
+        } else {
+            "Could not parse a task title from your message."
+        };
         send_plain(&room, msg).await;
         return;
     }
 
     let line = parse::build_line(&parsed);
     let result = if cfg.task_destination == config::TaskDestination::Journal {
-        let date = parsed.due.unwrap_or_else(|| chrono::Local::now().date_naive());
-        tasks::append_task_to_journal(&cfg.vault, &cfg.journal_dir, date, &line, cfg.tasks_heading.as_deref())
-            .map(|p| i18n::task_added_journal(cfg.lang, &p.display().to_string(), &line))
+        let date = parsed
+            .due
+            .unwrap_or_else(|| chrono::Local::now().date_naive());
+        tasks::append_task_to_journal(
+            &cfg.vault,
+            &cfg.journal_dir,
+            date,
+            &line,
+            cfg.tasks_heading.as_deref(),
+        )
+        .map(|p| i18n::task_added_journal(cfg.lang, &p.display().to_string(), &line))
     } else {
-        tasks::append_task(&cfg.vault, &cfg.inbox, &line).map(|_| i18n::task_added_inbox(cfg.lang, &line))
+        tasks::append_task(&cfg.vault, &cfg.inbox, &line)
+            .map(|_| i18n::task_added_inbox(cfg.lang, &line))
     };
     match result {
         Ok(msg) => send_plain(&room, &msg).await,
@@ -182,7 +208,10 @@ fn seconds_until_next(h: u32, m: u32) -> u64 {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::from_default_env().add_directive("taskrix=info".parse()?))
+        .with(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("taskrix=info".parse()?),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -205,7 +234,9 @@ async fn main() -> Result<()> {
             .await?;
         info!("Logged in as {}", cfg.user);
     } else {
-        anyhow::bail!("MATRIX_PASS must be set (token restore is environment-specific for this build)");
+        anyhow::bail!(
+            "MATRIX_PASS must be set (token restore is environment-specific for this build)"
+        );
     }
 
     // Message handler
@@ -220,18 +251,20 @@ async fn main() -> Result<()> {
     });
 
     // Auto-join invited rooms
-    client.add_event_handler(|ev: StrippedRoomMemberEvent, room: Room, client: Client| async move {
-        if let Some(user_id) = client.user_id() {
-            if ev.state_key == *user_id {
-                let room_id = room.room_id();
-                if let Err(e) = client.join_room_by_id(room_id).await {
-                    warn!("Failed to join room {}: {e}", room_id);
-                } else {
-                    info!("Joined room {}", room_id);
+    client.add_event_handler(
+        |ev: StrippedRoomMemberEvent, room: Room, client: Client| async move {
+            if let Some(user_id) = client.user_id() {
+                if ev.state_key == *user_id {
+                    let room_id = room.room_id();
+                    if let Err(e) = client.join_room_by_id(room_id).await {
+                        warn!("Failed to join room {}: {e}", room_id);
+                    } else {
+                        info!("Joined room {}", room_id);
+                    }
                 }
             }
-        }
-    });
+        },
+    );
 
     // Daily digest task
     if let Some(room_id_str) = cfg.remind_room.clone() {

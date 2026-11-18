@@ -31,7 +31,10 @@ fn due_of(line: &str) -> Option<NaiveDate> {
     // Try Tasks plugin inline: due:: 2026-11-20
     if let Some(idx) = line.find("due::") {
         let tail = line[idx + "due::".len()..].trim_start();
-        let date_str: String = tail.chars().take_while(|c| !c.is_whitespace() && *c != ']').collect();
+        let date_str: String = tail
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != ']')
+            .collect();
         if let Ok(d) = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
             return Some(d);
         }
