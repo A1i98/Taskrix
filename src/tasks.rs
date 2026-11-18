@@ -158,7 +158,12 @@ pub fn open_tasks(vault: &Path, ignore_dirs: &[String], include_dirs: &[String])
     tasks
 }
 
-pub fn complete_task(vault: &Path, ignore_dirs: &[String], include_dirs: &[String], query: &str) -> Option<String> {
+pub fn complete_task(
+    vault: &Path,
+    ignore_dirs: &[String],
+    include_dirs: &[String],
+    query: &str,
+) -> Option<String> {
     let q = query.to_lowercase();
     for task in open_tasks(vault, ignore_dirs, include_dirs) {
         if task.line.to_lowercase().contains(&q) || task.text.to_lowercase().contains(&q) {
@@ -253,13 +258,11 @@ pub fn list_default(vault: &Path, ignore_dirs: &[String], include_dirs: &[String
 
 pub fn list_all(vault: &Path, ignore_dirs: &[String], include_dirs: &[String]) -> Vec<Task> {
     let mut tasks = open_tasks(vault, ignore_dirs, include_dirs);
-    tasks.sort_by(|a, b| {
-        match (a.due, b.due) {
-            (Some(da), Some(db)) => da.cmp(&db).then_with(|| a.text.cmp(&b.text)),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a.text.cmp(&b.text),
-        }
+    tasks.sort_by(|a, b| match (a.due, b.due) {
+        (Some(da), Some(db)) => da.cmp(&db).then_with(|| a.text.cmp(&b.text)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.text.cmp(&b.text),
     });
     tasks
 }

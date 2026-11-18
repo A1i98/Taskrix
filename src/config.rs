@@ -77,7 +77,12 @@ impl Config {
             .collect();
         let include_dirs: Vec<String> = std::env::var("INCLUDE_DIRS")
             .ok()
-            .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            .map(|v| {
+                v.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default();
         let task_destination = match std::env::var("TASK_DEST")
             .unwrap_or_else(|_| "inbox".to_string())
